@@ -1,65 +1,64 @@
+"""
+FastAPI dependency — returns current authenticated CompanyEmployee from DB.
+"""
+
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import decode_token
-from app.core.enums import UserRole
-from app.models.user import UserInDB, TokenData
-from app.db.mock_store import get_user_by_id
+from app.core.security import decode_access_token
+from app.db.database import get_db
+from app.db.models import CompanyEmployee
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-) -> UserInDB:
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CompanyEmployee:
     credentials_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    try:
-        payload = decode_token(token)
-        user_id: str | None = payload.get("sub")
-        role: str | None = payload.get("role")
-        if user_id is None:
-            raise credentials_exc
-        token_data = TokenData(user_id=user_id, role=role)
-    except JWTError:
+    payload = decode_access_token(token)
+    if payload is None:
         raise credentials_exc
 
-    user = get_user_by_id(token_data.user_id)
-    if user is None:
+    user_id: str | None = payload.get("sub")
+    if user_id is None:
         raise credentials_exc
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
+
+    result = await db.execute(
+        select(CompanyEmployee).where(CompanyEmployee.id == int(user_id))
+    )
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise credentials_exc
     return user
 
 
-def require_role(*roles: UserRole):
-    """
-    Factory that returns a FastAPI dependency enforcing role membership.
+def require_role(*roles: str):
+    """Factory — returns a dependency that enforces one of the given roles."""
 
-    Usage:
-        @router.get("/admin-only", dependencies=[Depends(require_role(UserRole.ADMIN))])
-    """
-    async def role_guard(current_user: Annotated[UserInDB, Depends(get_current_user)]) -> UserInDB:
+    async def checker(
+        current_user: Annotated[CompanyEmployee, Depends(get_current_user)],
+    ) -> CompanyEmployee:
         if current_user.role not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied. Required role(s): {[r.value for r in roles]}",
+                detail=f"Requires role: {' or '.join(roles)}",
             )
         return current_user
 
-    return role_guard
+    return checker
 
 
-# ─── Convenience aliases ──────────────────────────────────────────────────────
-
-CurrentUser = Annotated[UserInDB, Depends(get_current_user)]
-OfficerOrAbove = Annotated[UserInDB, Depends(require_role(UserRole.OFFICER, UserRole.MANAGER, UserRole.ADMIN))]
-ManagerOrAbove = Annotated[UserInDB, Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))]
-AdminOnly = Annotated[UserInDB, Depends(require_role(UserRole.ADMIN))]
-VendorOnly = Annotated[UserInDB, Depends(require_role(UserRole.VENDOR))]
+# Convenience aliases
+OfficerOrAbove = require_role("officer", "manager", "admin")
+ManagerOrAbove = require_role("manager", "admin")
+AdminOnly = require_role("admin")

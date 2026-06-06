@@ -2,6 +2,7 @@
 In-memory mock store — replaces this entire file with Supabase/SQLAlchemy calls in Phase 2.
 Keyed by email for O(1) lookup during login.
 """
+
 from uuid import uuid4
 from datetime import datetime, timezone
 

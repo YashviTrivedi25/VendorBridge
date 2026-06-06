@@ -11,12 +11,20 @@ import {
   Users,
   Store,
   Menu,
-  X
+  X,
+  CheckSquare,
 } from 'lucide-react'
 import { useState } from 'react'
 import Logo from '../components/Logo'
+import VendorsPage from './VendorsPage'
+import RFQsPage from './RFQsPage'
+import QuotationsPage from './QuotationsPage'
 
-export default function DashboardPage() {
+interface DashboardPageProps {
+  page?: string
+}
+
+export default function DashboardPage({ page }: DashboardPageProps) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -27,7 +35,6 @@ export default function DashboardPage() {
     navigate('/login', { replace: true })
   }
 
-  // Define sidebar links and their required roles
   const navLinks = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['officer', 'vendor', 'manager', 'admin'] },
     { name: 'Vendors', path: '/vendors', icon: Store, roles: ['officer', 'manager', 'admin'] },
@@ -35,27 +42,36 @@ export default function DashboardPage() {
     { name: 'Quotations', path: '/quotations', icon: FileSpreadsheet, roles: ['officer', 'vendor', 'manager', 'admin'] },
     { name: 'Purchase Orders', path: '/purchase-orders', icon: ShoppingCart, roles: ['officer', 'vendor', 'manager', 'admin'] },
     { name: 'Invoices', path: '/invoices', icon: Receipt, roles: ['officer', 'vendor', 'manager', 'admin'] },
-    { name: 'Approvals', path: '/approvals', icon: Activity, roles: ['manager', 'admin'] },
+    { name: 'Approvals', path: '/approvals', icon: CheckSquare, roles: ['manager', 'admin'] },
     { name: 'Activity & Logs', path: '/logs', icon: Activity, roles: ['manager', 'admin'] },
     { name: 'User Management', path: '/users', icon: Users, roles: ['admin'] },
   ]
 
-  // Filter links based on current user role
   const allowedLinks = navLinks.filter(link => user && link.roles.includes(user.role))
 
+  // Render correct page content based on `page` prop
+  const renderContent = () => {
+    switch (page) {
+      case 'vendors':    return <VendorsPage />
+      case 'rfqs':       return <RFQsPage />
+      case 'quotations': return <QuotationsPage />
+      default:           return <DashboardHome user={user} handleLogout={handleLogout} />
+    }
+  }
+
   return (
-    <div className="min-h-screen flex bg-surface-900">
+    <div className="min-h-screen flex bg-surface-50">
       {/* Mobile menu overlay */}
       {mobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+        <div
+          className="fixed inset-0 bg-black/30 z-40 lg:hidden backdrop-blur-sm"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 glass-card border-l-0 border-t-0 border-b-0 rounded-r-2xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:block
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 shadow-sm transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:block
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="h-full flex flex-col p-4">
@@ -65,7 +81,7 @@ export default function DashboardPage() {
               <Logo className="w-8 h-8" />
               <span className="text-lg font-bold text-gray-900 tracking-tight">VendorBridge</span>
             </div>
-            <button 
+            <button
               className="lg:hidden text-gray-500 hover:text-gray-900"
               onClick={() => setMobileMenuOpen(false)}
             >
@@ -74,7 +90,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-1">
+          <nav className="flex-1 space-y-0.5">
             {allowedLinks.map((link) => {
               const Icon = link.icon
               const isActive = location.pathname === link.path || (link.path !== '/dashboard' && location.pathname.startsWith(link.path))
@@ -84,96 +100,110 @@ export default function DashboardPage() {
                   to={link.path}
                   onClick={() => setMobileMenuOpen(false)}
                   className={`
-                    flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors
-                    ${isActive 
-                      ? 'bg-brand-50 text-brand-600 border border-brand-100' 
+                    flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150
+                    ${isActive
+                      ? 'bg-brand-50 text-brand-700 border border-brand-100 shadow-sm'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
                   `}
                 >
-                  <Icon size={18} className={isActive ? 'text-brand-500' : 'text-gray-400'} />
+                  <Icon size={18} className={isActive ? 'text-brand-600' : 'text-gray-400'} />
                   {link.name}
                 </Link>
               )
             })}
           </nav>
 
-          {/* User Profile Summary */}
+          {/* User Profile */}
           <div className="mt-auto pt-4 border-t border-gray-100">
             <div className="flex items-center gap-3 px-2 py-3">
-              <div className="w-10 h-10 rounded-full bg-brand-100 border border-brand-200 flex items-center justify-center text-brand-600 font-bold">
+              <div className="w-9 h-9 rounded-full bg-brand-100 border border-brand-200 flex items-center justify-center text-brand-700 font-bold text-sm shrink-0">
                 {user?.first_name.charAt(0)}{user?.last_name.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{user?.first_name} {user?.last_name}</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">{user?.first_name} {user?.last_name}</p>
                 <p className="text-xs text-brand-600 font-medium capitalize">{user?.role}</p>
               </div>
+              <button onClick={handleLogout} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors" title="Sign out">
+                <LogOut size={15} />
+              </button>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        {/* Background glow */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-brand-200/50 rounded-full blur-3xl pointer-events-none" />
-
-        {/* Topbar (Mobile mainly) */}
-        <header className="lg:hidden flex items-center justify-between p-4 glass-card border-t-0 border-x-0 rounded-none z-10">
-          <button 
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Mobile topbar */}
+        <header className="lg:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 z-10 shadow-sm">
+          <button
             className="p-2 -ml-2 text-gray-500 hover:text-gray-900 rounded-xl hover:bg-gray-100 transition-colors"
             onClick={() => setMobileMenuOpen(true)}
           >
-            <Menu size={24} />
+            <Menu size={22} />
           </button>
           <Logo className="w-8 h-8" />
+          <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-50">
+            <LogOut size={18} />
+          </button>
         </header>
 
-        {/* Content Scroll Area */}
-        <div className="flex-1 overflow-auto p-4 lg:p-8 z-10">
-          <div className="max-w-5xl mx-auto animate-fade-in">
-            {/* Header section */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard Overview</h1>
-                <p className="text-sm text-gray-500">Welcome back, here's what's happening today.</p>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="flex items-center justify-center gap-2 text-sm text-gray-600 hover:text-red-600 transition-colors px-4 py-2 rounded-xl border border-gray-200 hover:bg-red-50 bg-white shadow-sm"
-              >
-                <LogOut size={16} />
-                Sign out
-              </button>
-            </div>
-
-            {/* Quick Stats Placeholder */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              {[
-                { label: 'Active RFQs', value: '12', color: 'text-brand-600' },
-                { label: 'Pending Approvals', value: '5', color: 'text-amber-500' },
-                { label: 'Total Spend (MTD)', value: '$2.3M', color: 'text-gray-900' },
-                { label: 'Active Vendors', value: '34', color: 'text-blue-500' },
-              ].map((stat, i) => (
-                <div key={i} className="glass-card p-5">
-                  <p className="text-sm font-medium text-gray-500 mb-1">{stat.label}</p>
-                  <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Placeholder Content Area */}
-            <div className="glass-card p-12 text-center border-dashed border-2 border-gray-200">
-               <div className="w-16 h-16 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center mx-auto mb-4">
-                 <LayoutDashboard size={28} className="text-brand-400" />
-               </div>
-               <h3 className="text-lg font-medium text-gray-900 mb-2">Workspace Content Area</h3>
-               <p className="text-gray-500 max-w-md mx-auto text-sm">
-                 This is the main container where tables, forms, and specific workflow views (RFQs, Quotations, Approvals) will render in Phase 2.
-               </p>
-            </div>
+        {/* Page Content */}
+        <div className="flex-1 overflow-auto p-4 lg:p-8">
+          <div className="max-w-6xl mx-auto">
+            {renderContent()}
           </div>
         </div>
       </main>
+    </div>
+  )
+}
+
+// ── Dashboard Home (default content) ─────────────────────────────────────────
+function DashboardHome({ user }: { user: any; handleLogout?: () => void }) {
+  const stats = [
+    { label: 'Active RFQs', value: '—', color: 'text-brand-600', bg: 'bg-brand-50', border: 'border-brand-100' },
+    { label: 'Pending Approvals', value: '—', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+    { label: 'Total Spend (MTD)', value: '—', color: 'text-gray-900', bg: 'bg-gray-50', border: 'border-gray-200' },
+    { label: 'Active Vendors', value: '—', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
+  ]
+
+  const quickLinks = [
+    { label: 'Manage Vendors', path: '/vendors', color: 'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-100' },
+    { label: 'Create RFQ', path: '/rfqs', color: 'bg-brand-50 text-brand-700 hover:bg-brand-100 border-brand-100' },
+    { label: 'View Quotations', path: '/quotations', color: 'bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-100' },
+  ]
+
+  return (
+    <div className="animate-fade-in">
+      {/* Welcome Banner */}
+      <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-lg">
+        <h1 className="text-2xl font-bold mb-1">Good day, {user?.first_name}! 👋</h1>
+        <p className="text-brand-100 text-sm">Welcome to VendorBridge — your procurement command centre.</p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {stats.map((stat, i) => (
+          <div key={i} className={`p-5 rounded-2xl border ${stat.bg} ${stat.border}`}>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{stat.label}</p>
+            <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="glass-card p-6">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Quick Actions</h2>
+        <div className="flex flex-wrap gap-3">
+          {quickLinks.map(l => (
+            <Link key={l.path} to={l.path}
+              className={`px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${l.color}`}>
+              {l.label}
+            </Link>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-4">Use the sidebar to navigate all modules. Stats will populate once connected to the database.</p>
+      </div>
     </div>
   )
 }
