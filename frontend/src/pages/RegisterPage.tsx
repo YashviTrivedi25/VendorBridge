@@ -28,14 +28,17 @@ interface FormState {
   phone: string
   role: UserRole
   country: string
-  additional_info: string
+  company_name: string
+  gst_number: string
+  category: string
   password: string
   confirm_password: string
 }
 
 const INITIAL: FormState = {
   first_name: '', last_name: '', email: '', phone: '',
-  role: 'officer', country: '', additional_info: '',
+  role: 'officer', country: '', company_name: '',
+  gst_number: '', category: '',
   password: '', confirm_password: '',
 }
 
@@ -57,19 +60,35 @@ export default function RegisterPage() {
   const selectedRole = ROLES.find((r) => r.value === form.role)!
 
   const validate = (): string => {
-    const nameRegex = /^[A-Za-z\s-]+$/
+    const nameRegex = /^[A-Za-z\s'-]+$/
     if (!form.first_name.trim()) return 'First name is required'
     if (!nameRegex.test(form.first_name)) return 'First name can only contain letters'
     if (!form.last_name.trim()) return 'Last name is required'
     if (!nameRegex.test(form.last_name)) return 'Last name can only contain letters'
     if (!form.email.trim()) return 'Email is required'
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Enter a valid email'
-    if (form.phone && !/^\+?[\d\s-]{7,15}$/.test(form.phone)) return 'Enter a valid phone number'
+    if (form.phone) {
+      // Strip leading + and country code digits (1-3 digits), spaces, dashes
+      const stripped = form.phone.replace(/^\+?\d{1,3}[\s-]?/, '').replace(/[\s-]/g, '')
+      if (stripped.length < 7 || stripped.length > 12) {
+        return 'Phone number must have 7–12 digits after the country code (e.g. +91 98765 43210)'
+      }
+      if (!/^\+?\d[\d\s-]{6,14}$/.test(form.phone)) {
+        return 'Enter a valid phone number with country prefix (e.g. +91 98765 43210)'
+      }
+    }
+    if (form.role === 'vendor') {
+      if (!form.company_name.trim()) return 'Company name is required for vendors'
+      if (!form.gst_number.trim()) return 'GST Number is required for vendors'
+      if (!form.category.trim()) return 'Vendor category is required'
+    }
+    
     if (!form.password) return 'Password is required'
     if (form.password.length < 8) return 'Password must be at least 8 characters'
     if (form.password !== form.confirm_password) return 'Passwords do not match'
     return ''
   }
+
 
   const getPhonePlaceholder = (country: string) => {
     switch (country) {
@@ -100,7 +119,9 @@ export default function RegisterPage() {
         phone: form.phone || undefined,
         country: form.country || undefined,
         role: form.role,
-        additional_info: form.additional_info || undefined,
+        company_name: form.company_name || undefined,
+        gst_number: form.role === 'vendor' ? form.gst_number : undefined,
+        category: form.role === 'vendor' ? form.category : undefined,
       })
       setSuccess(true)
       toast.success('Account created! Please sign in.')
@@ -203,23 +224,8 @@ export default function RegisterPage() {
               />
             </div>
 
-            {/* Phone + Country */}
+            {/* Country + Phone */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="reg-phone" className="form-label">
-                  <Phone size={10} className="inline mr-1" />Phone Number
-                </label>
-                <input
-                  id="reg-phone"
-                  type="tel"
-                  autoComplete="tel"
-                  placeholder={getPhonePlaceholder(form.country)}
-                  value={form.phone}
-                  onChange={set('phone')}
-                  className="input-field"
-                  disabled={isLoading}
-                />
-              </div>
               <div>
                 <label htmlFor="reg-country" className="form-label">
                   <Globe size={10} className="inline mr-1" />Country
@@ -237,7 +243,24 @@ export default function RegisterPage() {
                   ))}
                 </select>
               </div>
+              <div>
+                <label htmlFor="reg-phone" className="form-label">
+                  <Phone size={10} className="inline mr-1" />Phone Number
+                </label>
+                <input
+                  id="reg-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder={getPhonePlaceholder(form.country)}
+                  value={form.phone}
+                  onChange={set('phone')}
+                  className="input-field"
+                  disabled={isLoading}
+                />
+                <p className="text-xs text-gray-400 mt-1">Include country prefix, e.g. {getPhonePlaceholder(form.country)}</p>
+              </div>
             </div>
+
 
             {/* Role Selector */}
             <div>
@@ -280,18 +303,56 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* Additional Info */}
-            <div>
-              <label htmlFor="reg-info" className="form-label">Additional Information</label>
-              <textarea
-                id="reg-info"
-                rows={3}
-                placeholder="Company name, department, or any relevant details…"
-                value={form.additional_info}
-                onChange={set('additional_info')}
-                className="input-field resize-none"
-                disabled={isLoading}
-              />
+            {/* Vendor specific fields */}
+            {form.role === 'vendor' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-slide-up">
+                <div>
+                  <label htmlFor="reg-gst" className="form-label">GST Number</label>
+                  <input
+                    id="reg-gst"
+                    type="text"
+                    placeholder="e.g. 22AAAAA0000A1Z5"
+                    value={form.gst_number}
+                    onChange={set('gst_number')}
+                    className="input-field uppercase"
+                    disabled={isLoading}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="reg-category" className="form-label">Vendor Category</label>
+                  <select
+                    id="reg-category"
+                    value={form.category}
+                    onChange={set('category')}
+                    className="input-field appearance-none"
+                    disabled={isLoading}
+                  >
+                    <option value="">Select category…</option>
+                    <option value="IT Hardware">IT Hardware</option>
+                    <option value="Software">Software</option>
+                    <option value="Office Supplies">Office Supplies</option>
+                    <option value="Consulting">Consulting</option>
+                    <option value="Maintenance">Maintenance</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Company Name */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label htmlFor="reg-company" className="form-label">Company Name</label>
+                <input
+                  id="reg-company"
+                  type="text"
+                  placeholder="Acme Corp (Optional for officers)"
+                  value={form.company_name}
+                  onChange={set('company_name')}
+                  className="input-field"
+                  disabled={isLoading}
+                />
+              </div>
             </div>
 
             {/* Passwords */}

@@ -1,30 +1,92 @@
-from fastapi import APIRouter, Depends
+"""
+Purchase Orders — generate from approved quotation, approve/reject.
+"""
+
+import uuid
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.dependencies import require_role
-from app.core.enums import UserRole
+from app.db.database import get_db
+from app.db.models import CompanyEmployee, PurchaseOrder, Quotation
+from app.models.schemas import (
+    PurchaseOrderCreate,
+    PurchaseOrderOut,
+    PurchaseOrderUpdate,
+)
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["Purchase Orders"])
 
 
-@router.get("/", dependencies=[Depends(require_role(UserRole.OFFICER, UserRole.MANAGER, UserRole.ADMIN, UserRole.VENDOR))])
-async def list_purchase_orders():
-    """[Phase 2] List purchase orders. Vendors can view their own."""
-    return {"message": "Purchase orders list — Phase 2"}
+@router.get("/", response_model=list[PurchaseOrderOut])
+async def list_purchase_orders(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[
+        CompanyEmployee, Depends(require_role("officer", "manager", "admin", "vendor"))
+    ],
+    skip: int = 0,
+    limit: int = 50,
+):
+    result = await db.execute(
+        select(PurchaseOrder)
+        .order_by(PurchaseOrder.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    return result.scalars().all()
 
 
-@router.post("/", dependencies=[Depends(require_role(UserRole.OFFICER))])
-async def create_purchase_order():
-    """[Phase 2] Generate a purchase order (Procurement Officer)."""
-    return {"message": "Create PO — Phase 2"}
+@router.post("/", response_model=PurchaseOrderOut, status_code=status.HTTP_201_CREATED)
+async def create_purchase_order(
+    payload: PurchaseOrderCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[CompanyEmployee, Depends(require_role("officer"))],
+):
+    quot = await db.get(Quotation, payload.quotation_id)
+    if not quot:
+        raise HTTPException(status_code=404, detail="Quotation not found")
+    if quot.status != "Approved":
+        raise HTTPException(status_code=400, detail="Quotation must be Approved first")
+
+    po = PurchaseOrder(
+        po_number=f"PO-{uuid.uuid4().hex[:8].upper()}",
+        quotation_id=payload.quotation_id,
+        status="Pending",
+    )
+    db.add(po)
+    await db.commit()
+    await db.refresh(po)
+    return po
 
 
-@router.post("/{po_id}/approve", dependencies=[Depends(require_role(UserRole.MANAGER, UserRole.ADMIN))])
-async def approve_purchase_order(po_id: str):
-    """[Phase 2] Approve a purchase order (Manager/Approver)."""
-    return {"message": f"Approve PO {po_id} — Phase 2"}
+@router.post("/{po_id}/approve", response_model=PurchaseOrderOut)
+async def approve_purchase_order(
+    po_id: int,
+    payload: PurchaseOrderUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[CompanyEmployee, Depends(require_role("manager", "admin"))],
+):
+    po = await db.get(PurchaseOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase Order not found")
+    po.status = payload.status or "Approved"
+    await db.commit()
+    await db.refresh(po)
+    return po
 
 
-@router.get("/{po_id}", dependencies=[Depends(require_role(UserRole.OFFICER, UserRole.MANAGER, UserRole.ADMIN, UserRole.VENDOR))])
-async def get_purchase_order(po_id: str):
-    """[Phase 2] Get PO by ID."""
-    return {"message": f"PO {po_id} — Phase 2"}
-
+@router.get("/{po_id}", response_model=PurchaseOrderOut)
+async def get_purchase_order(
+    po_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[
+        CompanyEmployee, Depends(require_role("officer", "manager", "admin", "vendor"))
+    ],
+):
+    po = await db.get(PurchaseOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase Order not found")
+    return po

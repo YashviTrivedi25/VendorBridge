@@ -8,6 +8,7 @@ from app.core.config import settings
 
 # ─── Password Hashing ─────────────────────────────────────────────────────────
 
+
 def hash_password(plain: str) -> str:
     """Hash a plain-text password using bcrypt."""
     return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -20,7 +21,10 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 # ─── JWT ─────────────────────────────────────────────────────────────────────
 
-def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
+
+def create_access_token(
+    data: dict[str, Any], expires_delta: timedelta | None = None
+) -> str:
     """Create a signed JWT access token."""
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + (
@@ -34,3 +38,10 @@ def decode_token(token: str) -> dict[str, Any]:
     """Decode and verify a JWT. Raises JWTError on failure."""
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
+
+def decode_access_token(token: str) -> dict[str, Any] | None:
+    """Decode a JWT, returning None if invalid (used by auth dependency)."""
+    try:
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except JWTError:
+        return None
