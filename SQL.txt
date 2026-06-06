@@ -1,0 +1,133 @@
+**Refine:** You want the exact PostgreSQL code to build your updated database schema. You have chosen to keep the `company_employees` and `vendors` in separate tables, keep `product_name` for your items, and added the `updated_at` columns.
+
+**Perspective:** I will act as a straightforward database helper. I will write the exact SQL code for your requested design using simple, standard PostgreSQL data types. Note that I am linking the `user_id` in the `activity_logs` table to your `company_employees` table. Because vendors and employees are in separate tables now, a single foreign key cannot point to both.
+
+**Execute:**
+
+Here is the complete SQL script to build your schema. Run this in order so the foreign keys link up correctly.
+
+```sql
+-- 1. COMPANY EMPLOYEES TABLE
+CREATE TABLE company_employees (
+    id BIGSERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    company_name VARCHAR(255),
+    role VARCHAR(50) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    phone_number VARCHAR(20),
+    country VARCHAR(100),
+    -- Self-referencing foreign key for managers
+    manager_id BIGINT REFERENCES company_employees(id) ON DELETE SET NULL
+);
+
+-- 2. VENDORS TABLE
+CREATE TABLE vendors (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    category VARCHAR(100),
+    gst_number VARCHAR(15) UNIQUE,
+    email VARCHAR(255),
+    phone_number VARCHAR(20),
+    status VARCHAR(50) DEFAULT 'Pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. RFQS TABLE
+CREATE TABLE rfqs (
+    id BIGSERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    deadline TIMESTAMP WITH TIME ZONE NOT NULL,
+    status VARCHAR(50) DEFAULT 'Draft',
+    created_by BIGINT REFERENCES company_employees(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. RFQ ITEMS TABLE
+CREATE TABLE rfq_items (
+    id BIGSERIAL PRIMARY KEY,
+    rfq_id BIGINT REFERENCES rfqs(id) ON DELETE CASCADE,
+    product_name VARCHAR(255) NOT NULL,
+    quantity INT NOT NULL CHECK (quantity > 0),
+    category VARCHAR(100),
+    units VARCHAR(50) NOT NULL
+);
+
+-- 5. RFQ VENDORS TABLE (Many-to-Many)
+CREATE TABLE rfq_vendors (
+    rfq_id BIGINT REFERENCES rfqs(id) ON DELETE CASCADE,
+    vendor_id BIGINT REFERENCES vendors(id) ON DELETE CASCADE,
+    PRIMARY KEY (rfq_id, vendor_id)
+);
+
+-- 6. QUOTATIONS TABLE
+CREATE TABLE quotations (
+    id BIGSERIAL PRIMARY KEY,
+    rfq_id BIGINT REFERENCES rfqs(id) ON DELETE CASCADE,
+    vendor_id BIGINT REFERENCES vendors(id) ON DELETE CASCADE,
+    total_price DECIMAL(12, 2) NOT NULL DEFAULT 0.00 CHECK (total_price >= 0),
+    delivery_days INT NOT NULL CHECK (delivery_days >= 0),
+    notes TEXT,
+    status VARCHAR(50) DEFAULT 'Submitted',
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 7. QUOTATION ITEMS TABLE
+CREATE TABLE quotation_items (
+    id BIGSERIAL PRIMARY KEY,
+    quotation_id BIGINT REFERENCES quotations(id) ON DELETE CASCADE,
+    product_name VARCHAR(255) NOT NULL,
+    qty INT NOT NULL CHECK (qty > 0),
+    unit_price DECIMAL(12, 2) NOT NULL CHECK (unit_price >= 0),
+    total DECIMAL(12, 2) NOT NULL CHECK (total >= 0)
+);
+
+-- 8. APPROVALS TABLE
+CREATE TABLE approvals (
+    id BIGSERIAL PRIMARY KEY,
+    quotation_id BIGINT REFERENCES quotations(id) ON DELETE CASCADE,
+    approver_id BIGINT REFERENCES company_employees(id) ON DELETE SET NULL,
+    status VARCHAR(50) DEFAULT 'Pending',
+    remarks TEXT,
+    approved_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 9. PURCHASE ORDERS TABLE
+CREATE TABLE purchase_orders (
+    id BIGSERIAL PRIMARY KEY,
+    po_number VARCHAR(100) UNIQUE NOT NULL,
+    quotation_id BIGINT REFERENCES quotations(id) ON DELETE RESTRICT,
+    status VARCHAR(50) DEFAULT 'Pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 10. INVOICES TABLE
+CREATE TABLE invoices (
+    id BIGSERIAL PRIMARY KEY,
+    po_id BIGINT REFERENCES purchase_orders(id) ON DELETE RESTRICT,
+    invoice_number VARCHAR(100) UNIQUE NOT NULL,
+    subtotal DECIMAL(12, 2) NOT NULL CHECK (subtotal >= 0),
+    gst DECIMAL(12, 2) NOT NULL CHECK (gst >= 0),
+    grand_total DECIMAL(12, 2) NOT NULL CHECK (grand_total >= 0),
+    status VARCHAR(50) DEFAULT 'Unpaid',
+    due_date DATE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 11. ACTIVITY LOGS TABLE
+CREATE TABLE activity_logs (
+    id BIGSERIAL PRIMARY KEY,
+    -- Linked to company_employees since they are the primary internal users
+    user_id BIGINT REFERENCES company_employees(id) ON DELETE SET NULL,
+    action VARCHAR(255) NOT NULL,
+    module VARCHAR(100) NOT NULL,
+    details JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+```
